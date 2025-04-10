@@ -88,7 +88,7 @@ const LazyDropdown = ({ data, onSelect }) => {
               style={{
                 position: 'absolute',
                 width: '100%',
-                top:"100%",
+                top:"75%",
                 maxHeight: '200px',
                 overflowY: 'auto',
                 border: '1px solid #ccc',
