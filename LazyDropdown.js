@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef } from 'react';
 
 const LazyDropdown = ({ data, onSelect }) => {
@@ -99,3 +101,8 @@ const LazyDropdown = ({ data, onSelect }) => {
 };
 
 export default LazyDropdown;
+
+   <LazyDropdown
+                      data={this.props.transporterOption}
+                      onSelect={this.props.handleSelectGroup}
+                    />
