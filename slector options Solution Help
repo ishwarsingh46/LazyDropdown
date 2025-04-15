@@ -1,0 +1,71 @@
+  
+/Reports
+_______________________________________________________________
+<Select
+{.....}
+ options={this.props.transpoterOptions}
+                        onChange={this.props.onChangeTranspoter}
+                        onInputChange={(e) => this.props.filtersTranspoter(e)}
+                      />
+# on InputChnage send data to the parent 
+
+          <QuickFilters
+            {.....}
+            handleChange={this.handleChange}
+           
+            filtersTranspoter={this.filtersTranspoter}
+          />
+# Calls the function filtersTranspoter
+
+  filtersTranspoter=(e)=>{
+    if (e?.length > 0) {
+      let filtersData={
+        offset:this.state.offset,
+        limit:this.state.limit,
+         q:e
+      }
+      this.fetchAllTransporterSearch(filtersData)
+    }
+    if (e?.length === 0) {
+      let filtersData={
+        offset:this.state.offset,
+        limit:this.state.limit,
+         q:""
+      }
+      this.fetchAllTransporterSearch(filtersData)
+      }
+  }
+
+
+# Passes the data to the fetchAllTransporterSearch(filtersData)
+
+  fetchAllTransporterSearch = (filtersData) =>{
+    this.props.fetchAllTransporterSearch(
+      filtersData.offset,
+      filtersData.limit,
+      filtersData.q,
+      (res) => {
+        let transporter = [];
+        if (res.data?.docs?.length > 0) {
+          res.data.docs.forEach((ele) => {
+            transporter.push({
+              value: ele._id ? ele._id : "",
+              label: ele.name ? ele.name : "",
+            });
+          });
+        }
+        this.setState(
+          {
+            transpoter: transporter,
+          },
+          () => {}
+        );
+      }
+      )
+  }
+
+# This calls the fetchAllTransporterSearch Api 
+
+
+so when we search somthing then it gets the option rather then getting all data at one only the time we input and search it and get from the server
+bascilly its like filter with in a filter
