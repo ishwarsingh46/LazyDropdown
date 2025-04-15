@@ -1,0 +1,355 @@
+import React, { Component } from "react";
+
+class Selector extends Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      searchTerm: "",
+      selectedOptions: [],
+      tagOptions: [],
+      options: props.options || [],
+      // NEW: State for virtualization
+      scrollPosition: 0, // Tracks the scroll position of the checkbox container
+    };
+    // NEW: Reference to the container for scroll handling
+    this.checkboxContainerRef = React.createRef();
+  }
+
+  handleSearch = (event) => {
+    this.setState({ searchTerm: event.target.value });
+  };
+
+  toggleOption = (value, label) => {
+    this.setState((prevState) => {
+      const { selectedOptions, tagOptions } = prevState;
+
+      const valueId = typeof value === "object" && value.id ? value.id : value;
+
+      const updatedSelectedOptions = selectedOptions.some((opt) => {
+        const optValueId = typeof opt.value === "object" && opt.value.id ? opt.value.id : opt.value;
+        return optValueId === valueId;
+      })
+        ? selectedOptions.filter((opt) => {
+            const optValueId = typeof opt.value === "object" && opt.value.id ? opt.value.id : opt.value;
+            return optValueId !== valueId;
+          })
+        : [...selectedOptions, { value, label }];
+
+      const updatedTagOptions = [...tagOptions];
+      if (!tagOptions.some((tag) => {
+        const tagValueId = typeof tag.value === "object" && tag.value.id ? tag.value.id : tag.value;
+        return tagValueId === valueId;
+      })) {
+        updatedTagOptions.push({ value, label });
+      }
+
+      const pageKey = window.location.pathname.replace(/^\//, "");
+      const existingData = JSON.parse(localStorage.getItem(pageKey)) || {};
+      existingData[this.props.inputName] = updatedSelectedOptions.map((opt) => ({
+        value: typeof opt.value === "object" && opt.value.id ? opt.value.id : opt.value,
+        label: opt.label,
+      }));
+
+      localStorage.setItem(pageKey, JSON.stringify(existingData));
+
+      return { selectedOptions: updatedSelectedOptions, tagOptions: updatedTagOptions };
+    });
+  };
+
+  removeOption = (optionValue) => {
+    const valueId = typeof optionValue === "object" && optionValue.id ? optionValue.id : optionValue;
+
+    this.setState((prevState) => {
+      const updatedSelectedOptions = prevState.selectedOptions.filter((item) => {
+        const itemValueId = typeof item.value === "object" && item.value.id ? item.value.id : item.value;
+        return itemValueId !== valueId;
+      });
+
+      const updatedTagOptions = prevState.tagOptions.filter((tag) => {
+        const tagValueId = typeof tag.value === "object" && tag.value.id ? tag.value.id : tag.value;
+        return tagValueId !== valueId;
+      });
+
+      const pageKey = window.location.pathname.replace(/^\//, "");
+      const existingData = JSON.parse(localStorage.getItem(pageKey)) || {};
+      existingData[this.props.inputName] = updatedSelectedOptions.map((opt) => ({
+        value: typeof opt.value === "object" && opt.value.id ? opt.value.id : opt.value,
+        label: opt.label,
+      }));
+
+      localStorage.setItem(pageKey, JSON.stringify(existingData));
+
+      return { selectedOptions: updatedSelectedOptions, tagOptions: updatedTagOptions };
+    });
+  };
+
+  componentDidMount() {
+    const pageKey = window.location.pathname.replace(/^\//, "");
+    const savedData = JSON.parse(localStorage.getItem(pageKey)) || {};
+    if (savedData[this.props.inputName]) {
+      this.setState({
+        selectedOptions: savedData[this.props.inputName].map((item) => ({
+          value: item.value,
+          label: item.label,
+        })),
+        tagOptions: savedData[this.props.inputName].map((item) => ({
+          value: item.value,
+          label: item.label,
+        })),
+      });
+    }
+
+// NEW: Add scroll event listener for virtualization, with explicit check to avoid no-unused-expressions
+if (this.checkboxContainerRef.current) {
+  this.checkboxContainerRef.current.addEventListener("scroll", this.handleScroll);
+}
+  }
+
+// NEW: Clean up scroll event listener on unmount, with explicit check to avoid no-unused-expressions
+  componentWillUnmount() {
+    if (this.checkboxContainerRef.current) {
+      this.checkboxContainerRef.current.removeEventListener("scroll", this.handleScroll);
+    }
+  }
+
+  // NEW: Handle scroll to update visible items
+  handleScroll = () => {
+    if (this.checkboxContainerRef.current) {
+      this.setState({ scrollPosition: this.checkboxContainerRef.current.scrollTop });
+    }
+  };
+
+  toggleMoreOptions = () => {
+    const elements = document.getElementsByClassName("more-options");
+    const element = elements[0];
+    element.style.display = element.style.display === "flex" ? "none" : "flex";
+  };
+
+  getSvg(color) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <circle cx="6" cy="6" r="6" fill={color} fillOpacity="0.2" />
+        <circle cx="6" cy="6" r="3" fill={color} />
+      </svg>
+    );
+  }
+
+  getcolors = (element) => {
+    const ele = element.toLowerCase();
+    switch (ele) {
+      case "planned":
+        return this.getSvg("#E19600");
+      case "arrived at source":
+        return this.getSvg("#FF6F00");
+      case "quality check completed":
+        return this.getSvg("#28A34C");
+      case "loading in progress":
+        return this.getSvg("#4EB4BE");
+      case "shipment verified":
+        return this.getSvg("#006400");
+      case "in transit":
+        return this.getSvg("#A020F0");
+      case "arrived at via point":
+        return this.getSvg("#FF6F00");
+      case "epod in progress":
+        return this.getSvg("#4EB4BE");
+      case "completed":
+        return this.getSvg("#2800FC");
+      case "rejected":
+        return this.getSvg("#E53D2C");
+      case "cancelled":
+        return this.getSvg("#AC1000");
+      case "assigned":
+        return this.getSvg("#E19600");
+      case "accepted":
+        return this.getSvg("#2800FC");
+      case "finalized":
+        return this.getSvg("#28A34C");
+      case "autorejected":
+        return this.getSvg("#E53D2C");
+      case "expired":
+        return this.getSvg("#A020F0");
+      case "reassigned":
+        return this.getSvg("#FF6F00");
+      case "drafted":
+        return this.getSvg("#6D7885");
+      case "submitted":
+        return this.getSvg("#28A34C");
+      case "approval pending":
+        return this.getSvg("#E19600");
+      case "approved":
+        return this.getSvg("#2800FC");
+      case "sent for revision":
+        return this.getSvg("#FF6F00");
+      case "paid":
+        return this.getSvg("#28A34C");
+      default:
+        return <div className="statusRound"></div>;
+    }
+  };
+
+  render() {
+    const { searchTerm, selectedOptions, tagOptions, options, scrollPosition } = this.state;
+    const { inputName } = this.props;
+    const filteredOptions = options.filter((option) =>
+      option.label.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    const arraysByInputName = [
+      "Planned",
+      "Arrived At Source",
+      "Quality Check Completed",
+      "Loading In Progress",
+      "Shipment Verified",
+      "In Transit",
+      "Arrived At Via Point",
+      "EPOD In Progress",
+      "Completed",
+      "Rejected",
+      "Cancelled",
+      "Assigned",
+      "Accepted",
+      "Finalized",
+      "AutoRejected",
+      "Expired",
+      "Reassigned",
+      "Drafted",
+      "Submitted",
+      "Approval Pending",
+      "Approved",
+      "Sent for Revision",
+      "Paid"
+    ];
+
+    // NEW: Virtualization calculations
+    const itemHeight = 40; // Estimated height of each checkbox item (adjust as needed)
+    const containerHeight = 200; // Height of the visible container (adjust based on CSS)
+    const buffer = 5; // Number of extra items to render above/below for smooth scrolling
+    const startIndex = Math.max(
+      0,
+      Math.floor(scrollPosition / itemHeight) - buffer
+    );
+    const endIndex = Math.min(
+      filteredOptions.length,
+      Math.ceil((scrollPosition + containerHeight) / itemHeight) + buffer
+    );
+    const visibleOptions = filteredOptions.slice(startIndex, endIndex);
+    const totalHeight = filteredOptions.length * itemHeight; 
+
+    return (
+      <div className="multi-selector">
+        <div className="search-container">
+          <input
+            className="multi-search input"
+            type="text"
+            placeholder="Search..."
+            value={searchTerm}
+            onChange={this.handleSearch}
+          />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+          >
+            <path
+              d="M9.3 15.6C12.7794 15.6 15.6 12.7794 15.6 9.3C15.6 5.82061 12.7794 3 9.3 3C5.82061 3 3 5.82061 3 9.3C3 12.7794 5.82061 15.6 9.3 15.6Z"
+              stroke="#6D7885"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M17.0004 17.0004L14.9004 14.9004"
+              stroke="#6D7885"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+
+        <div className="multi-tags">
+          {selectedOptions.length === 0 && <span className="placeholder-text">Tags</span>}
+          {selectedOptions.slice(0, 2).map((option, index) => (
+            <span
+              key={`${inputName}-${typeof option.value === "object" ? option.value.id : option.value}-${index}`}
+              className="multi-options"
+            >
+              {option.label}{" "}
+              <button onClick={() => this.removeOption(option.value)} className="otp-close">
+                x
+              </button>
+            </span>
+          ))}
+          {selectedOptions.length > 2 && (
+            <>
+              <button className="tooltip-button" onClick={this.toggleMoreOptions}>
+                +{selectedOptions.length - 2}
+              </button>
+              <div className="more-options">
+                <div className="tooltip-content">
+                  {selectedOptions.slice(2).map((option, index) => (
+                    <span
+                      key={`${inputName}-${typeof option.value === "object" ? option.value.id : option.value}-${index + 2}`}
+                      className="multi-options"
+                    >
+                      {option.label}{" "}
+                      <button
+                        onClick={() => this.removeOption(option.value)}
+                        className="otp-close"
+                      >
+                        x
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* NEW: Modified checkbox container with virtualization */}
+        <div
+          className="all-checkboxes"
+          ref={this.checkboxContainerRef}
+          style={{ height: `${containerHeight}px`, overflowY: "auto" }}
+        >
+          {/* NEW: Wrapper div to maintain total height and offset */}
+          <div style={{ height: `${totalHeight}px`, position: "relative" }}>
+            {filteredOptions.length > 0 ? (
+              visibleOptions.map((option, index) => (
+                <label
+                  key={`${inputName}-${typeof option.value === "object" ? option.value.id : option.value}-${startIndex + index}`}
+                  className="multi-checkbox"
+                  style={{
+                    position: "absolute",
+                    top: `${(startIndex + index) * itemHeight}px`, // Position each item
+                    width: "100%",
+                  }}
+                >
+                  <input
+                    className="hidden-checkbox"
+                    type="checkbox"
+                    checked={selectedOptions.some((opt) => {
+                      return typeof opt.value === "object"
+                        ? (opt.value.id === option.value.id || opt.label === option.label)
+                        : (opt.value === option.value || opt.label === option.label);
+                    })}
+                    onChange={() => this.toggleOption(option.value, option.label)}
+                  />
+                  <div style={{ display: "flex", alignItems: "center" }}>
+                    {arraysByInputName.includes(option.label) && this.getcolors(option.label)}
+                  </div>
+                  {option.label}
+                </label>
+              ))
+            ) : (
+              <p>No options available</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default Selector;
