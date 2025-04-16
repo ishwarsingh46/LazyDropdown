@@ -1,0 +1,6 @@
+Tool Tip 
+
+   <div className="tooltipIconComment">
+             <div className="ellipsis-text-remark comn180">{ele.transporterName || "-----"}</div>
+             <div className="tooltipIcontext ">{ele?.transporterName}</div>
+           </div>
