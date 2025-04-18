@@ -1,0 +1,39 @@
+filtersTranspoter = (e, inputType) => {
+  // Prepare filters
+  const filtersData = {
+    offset: this.state.offset,
+    limit: this.state.limit,
+    q: e,
+  };
+
+  // Initialize debounceTimers if not already
+  if (!this.debounceTimers) {
+    this.debounceTimers = {};
+  }
+
+  // Clear previous timeout for this input type
+  if (this.debounceTimers[inputType]) {
+    clearTimeout(this.debounceTimers[inputType]);
+  }
+
+  // Check if input value length is > 1
+  if (e?.length > 1) {
+    console.log("filtersData", filtersData);
+
+    this.debounceTimers[inputType] = setTimeout(() => {
+      switch (inputType) {
+        case "transporter":
+          this.fetchAllTransporterSearch(filtersData);
+          break;
+        case "customer":
+          this.fetchAllCustomerSearch(filtersData);
+          break;
+        case "source":
+          this.fetchHops(filtersData);
+          break;
+        default:
+          console.warn("Unknown inputType:", inputType);
+      }
+    }, 1000); // 1 second delay
+  }
+};
