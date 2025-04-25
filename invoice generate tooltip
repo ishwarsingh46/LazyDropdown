@@ -1,0 +1,30 @@
+        lrNo: e?.shipments?.length ? (
+            <div className="tooltipIconComment">
+              <div className="ellipsis-text-remark comn180">
+                {e.shipments.slice(0, 2).map(s => s.lrNo || "-----").join(", ")}
+                {e.shipments.length > 2 && "…"}
+              </div>
+              <div className="tooltipIcontext3 "
+            style={{
+              left: e.shipments.length > 7 ? "200px" : "auto", 
+            }}
+              >
+              {e.shipments.map((s, i) => s.lrNo || "-----").join(", ")}
+              </div>
+            </div>
+          ) : "N/A",
+
+
+.tooltipIconComment .tooltipIcontext3 {
+  visibility: hidden;
+  min-width: 200px;
+  min-width: fit-content;
+  white-space:nowrap;  
+  background-color: #05284e;
+  color: white;
+  text-align: center;
+  border-radius: 6px;
+  padding: 5px;
+  position: absolute;
+  z-index: 999;
+  bottom: 150%;
