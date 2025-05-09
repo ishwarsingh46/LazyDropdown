@@ -1,0 +1,19 @@
+{
+  accessorKey: "driverName",
+  header: () => (
+    <div className="flex items-center text-[#64748B] text-[12px] font-[400]">
+      Driver
+      <ChevronsUpDown className="ml-auto size-4" />
+    </div>
+  ),
+  cell: ({ row }) => {
+    const driverName = row.getValue("driverName");
+    const maxWidth = driverName.length > 10 ? "max-w-[150px]" : "max-w-[100px]"; // Example dynamic width
+
+    return (
+      <div className={`${maxWidth} truncate`}>
+        {driverName}
+      </div>
+    );
+  },
+}
