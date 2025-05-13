@@ -5,7 +5,10 @@ import {
   LoadScript,
   Marker,
   DirectionsRenderer,
+  OverlayView,
 } from "@react-google-maps/api";
+import Image from "next/image";
+
 
 declare const google: any;
 
@@ -27,7 +30,7 @@ interface MapComponentProps {
     lng: number;
   };
 }
- 
+
 const MapComponent: React.FC<MapComponentProps> = ({
   locations,
   currentLocation,
@@ -35,38 +38,37 @@ const MapComponent: React.FC<MapComponentProps> = ({
 
   // for validation 
   if (
-  !currentLocation ||
-  !Number.isFinite(currentLocation.lat) ||
-  !Number.isFinite(currentLocation.lng)
-) {
-  return ( <div className="h-full p-4">Invalid or missing current location </div>
-     )
-}
+    !currentLocation ||
+    !Number.isFinite(currentLocation.lat) ||
+    !Number.isFinite(currentLocation.lng)
+  ) {
+    return (<div className="h-full p-4">Invalid or missing current location </div>
+    )
+  }
 
   const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
 
-// console.log( "location",locations,"currlocation", currentLocation);
+  // console.log( "location",locations,"currlocation", currentLocation);
 
-  // Use a ref to store the DirectionsService instance
+
   const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null); 
+  const mapRef = useRef<google.maps.Map | null>(null);
 
   const onMapLoad = useCallback((map: google.maps.Map) => {
-      mapRef.current = map;
+    mapRef.current = map;
 
-      if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
-           directionsServiceRef.current = new google.maps.DirectionsService();
-      } else {
-           console.error("Google Maps API not available when map loaded");
-      }
-  }, []); 
+    if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
+      directionsServiceRef.current = new google.maps.DirectionsService();
+    } else {
+      console.error("Google Maps API not available when map loaded");
+    }
+  }, []);
 
-  //  calculate the route when locations change, but only after service is ready
   useEffect(() => {
 
     if (!directionsServiceRef.current || !locations || locations.length < 2) {
-        setDirectionsResult(null); 
-        return;
+      setDirectionsResult(null);
+      return;
     }
 
     const origin = locations[0];
@@ -76,8 +78,7 @@ const MapComponent: React.FC<MapComponentProps> = ({
       stopover: true,
     }));
 
-    // Make the directions request using the service instance from the ref
-    directionsServiceRef.current.route( 
+    directionsServiceRef.current.route(
       {
         origin: { lat: origin.lat, lng: origin.lng },
         destination: { lat: destination.lat, lng: destination.lng },
@@ -95,30 +96,97 @@ const MapComponent: React.FC<MapComponentProps> = ({
       }
     );
 
-  }, [locations]); 
+  }, [locations]);
+
+  const endPoint = locations[locations.length - 1];
+
+  interface Coordinates {
+    lat: number;
+    lng: number;
+  }
+
+function getBearing(start: Coordinates, end: Coordinates): number {
+  const toRad = (deg: number): number => (deg * Math.PI) / 180;
+  const toDeg = (rad: number): number => (rad * 180) / Math.PI;
+  const dLon = toRad(end.lng - start.lng);
+  const lat1 = toRad(start.lat);
+  const lat2 = toRad(end.lat);
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  const brng = Math.atan2(y, x);
+  return (toDeg(brng) + 360) % 360;
+}
+
+function findClosestIndex(locations: Coordinates[], current: Coordinates): number {
+  let minDist = Number.MAX_VALUE;
+  let idx = 0;
+  locations.forEach((loc, i) => {
+    const dist = Math.hypot(loc.lat - current.lat, loc.lng - current.lng);
+    if (dist < minDist) {
+      minDist = dist;
+      idx = i;
+    }
+  });
+  return idx;
+}
+
+// Usage in your component:
+const coordsList = locations.map(loc => ({ lat: loc.lat, lng: loc.lng }));
+const closestIdx = findClosestIndex(coordsList, currentLocation);
+const nextHop = coordsList[closestIdx + 1] || coordsList[closestIdx]; // fallback to self if at end
+const bearing = getBearing(currentLocation, nextHop);
+
 
   return (
     <LoadScript googleMapsApiKey="YOUR_VALID_Maps_API_KEY">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={currentLocation}
-        zoom={25}
-        onLoad={onMapLoad} 
+        zoom={24}
+        onLoad={onMapLoad}
       >
-         {locations.map((loc, idx) => (
-           <Marker key={idx} position={{ lat: loc.lat, lng: loc.lng }} label={`${idx + 1}`} title={`${loc.name}\nStatus: ${loc.status}\nTime: ${loc.timestamp}`} />
-         ))}
+        {locations.map((loc, idx) => (
+          <Marker key={idx} position={{ lat: loc.lat, lng: loc.lng }} label={`${idx + 1}`} title={`${loc.name}\nStatus: ${loc.status}\nTime: ${loc.timestamp}`} />
+        ))}
 
-         <Marker position={currentLocation} icon={{ url: "https://maps.google.com/mapfiles/ms/icons/truck.png", }} title="Vehicle Current Location"/>
+       <OverlayView
+  position={currentLocation}
+  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+>
+  <div className="relative w-[80px] h-[80px]">
+    {/* Outer circle */}
+    <div className="absolute inset-0 rounded-full bg-blue-300 opacity-30 pointer-events-none"></div>
+    {/* Inner circle */}
+    <div className="absolute inset-4 rounded-full bg-blue-500 opacity-20 pointer-events-none"></div>
+    {/* Truck icon, rotated to point to end point */}
+    <div
+      title="Vehicle Current Location"
+      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10"
+      style={{ transform: `translate(-50%, -50%) rotate(${bearing}deg)` }}
+    >
+      <Image
+        src="/images/truck.svg"
+        alt="Truck icon"
+        height={40}
+        width={40}
+        className="opacity-100"
+        style={{ display: "block" }}
+      />
+    </div>
+  </div>
+</OverlayView>
 
 
-      
+
         {directionsResult && (
           <DirectionsRenderer
             directions={directionsResult}
-             options={{
+            options={{
               polylineOptions: {
-                strokeColor: "#93C5FD", 
+                strokeColor: "#93C5FD",
                 strokeOpacity: 0.7,
                 strokeWeight: 4,
               },
