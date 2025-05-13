@@ -1,0 +1,135 @@
+
+import React, { useEffect, useState, useRef, useCallback } from "react"; // Import useRef and useCallback
+import {
+  GoogleMap,
+  LoadScript,
+  Marker,
+  DirectionsRenderer,
+} from "@react-google-maps/api";
+
+declare const google: any;
+
+const containerStyle = {
+  width: "100%",
+  height: "100%",
+};
+
+interface MapComponentProps {
+  locations: {
+    name: string;
+    lat: number;
+    lng: number;
+    status: string;
+    timestamp: string;
+  }[];
+  currentLocation: {
+    lat: number;
+    lng: number;
+  };
+}
+ 
+const MapComponent: React.FC<MapComponentProps> = ({
+  locations,
+  currentLocation,
+}) => {
+
+  // for validation 
+  if (
+  !currentLocation ||
+  !Number.isFinite(currentLocation.lat) ||
+  !Number.isFinite(currentLocation.lng)
+) {
+  return ( <div className="h-full p-4">Invalid or missing current location </div>
+     )
+}
+
+  const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
+
+// console.log( "location",locations,"currlocation", currentLocation);
+
+  // Use a ref to store the DirectionsService instance
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null); 
+
+  const onMapLoad = useCallback((map: google.maps.Map) => {
+      mapRef.current = map;
+
+      if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
+           directionsServiceRef.current = new google.maps.DirectionsService();
+      } else {
+           console.error("Google Maps API not available when map loaded");
+      }
+  }, []); 
+
+  //  calculate the route when locations change, but only after service is ready
+  useEffect(() => {
+
+    if (!directionsServiceRef.current || !locations || locations.length < 2) {
+        setDirectionsResult(null); 
+        return;
+    }
+
+    const origin = locations[0];
+    const destination = locations[locations.length - 1];
+    const waypoints = locations.slice(1, -1).map(loc => ({
+      location: { lat: loc.lat, lng: loc.lng },
+      stopover: true,
+    }));
+
+    // Make the directions request using the service instance from the ref
+    directionsServiceRef.current.route( 
+      {
+        origin: { lat: origin.lat, lng: origin.lng },
+        destination: { lat: destination.lat, lng: destination.lng },
+        waypoints: waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+        optimizeWaypoints: false,
+      },
+      (response, status) => {
+        if (status === google.maps.DirectionsStatus.OK && response) {
+          setDirectionsResult(response);
+        } else {
+          console.error('Directions request failed due to ' + status);
+          setDirectionsResult(null);
+        }
+      }
+    );
+
+  }, [locations]); 
+
+  return (
+    <LoadScript googleMapsApiKey="YOUR_VALID_Maps_API_KEY">
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={currentLocation}
+        zoom={25}
+        onLoad={onMapLoad} 
+      >
+         {locations.map((loc, idx) => (
+           <Marker key={idx} position={{ lat: loc.lat, lng: loc.lng }} label={`${idx + 1}`} title={`${loc.name}\nStatus: ${loc.status}\nTime: ${loc.timestamp}`} />
+         ))}
+
+         <Marker position={currentLocation} icon={{ url: "https://maps.google.com/mapfiles/ms/icons/truck.png", }} title="Vehicle Current Location"/>
+
+
+      
+        {directionsResult && (
+          <DirectionsRenderer
+            directions={directionsResult}
+             options={{
+              polylineOptions: {
+                strokeColor: "#93C5FD", 
+                strokeOpacity: 0.7,
+                strokeWeight: 4,
+              },
+              // suppressMarkers: true,
+            }}
+          />
+        )}
+
+      </GoogleMap>
+    </LoadScript>
+  );
+};
+
+export default MapComponent;
