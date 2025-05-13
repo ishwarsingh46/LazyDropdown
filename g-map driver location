@@ -133,3 +133,121 @@ const MapComponent: React.FC<MapComponentProps> = ({
 };
 
 export default MapComponent;
+
+
+
+
+
+//simple line
+
+
+import React, { useEffect, useState, useRef, useCallback } from "react";
+import {
+  GoogleMap,
+  LoadScript,
+  Marker,
+  Polyline,
+} from "@react-google-maps/api";
+
+declare const google: any;
+
+const containerStyle = {
+  width: "100%",
+  height: "100%",
+};
+
+interface Location {
+  name: string;
+  lat: number;
+  lng: number;
+  status: string;
+  timestamp: string;
+}
+
+interface MapComponentProps {
+  locations: Location[];
+  currentLocation: {
+    lat: number;
+    lng: number;
+  };
+}
+
+const MapComponent: React.FC<MapComponentProps> = ({ locations, currentLocation }) => {
+  const [routePath, setRoutePath] = useState<{ lat: number; lng: number }[]>([]);
+  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+
+  const onMapLoad = useCallback((map: google.maps.Map): void => {
+    mapRef.current = map;
+    if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
+      directionsServiceRef.current = new google.maps.DirectionsService();
+    }
+    }, []);
+
+  useEffect(() => {
+    if (!directionsServiceRef.current || !locations || locations.length < 2) {
+      setRoutePath([]);
+      return;
+    }
+
+    const origin = locations[0];
+    const destination = locations[locations.length - 1];
+    const waypoints = locations.slice(1, -1).map(loc => ({
+      location: { lat: loc.lat, lng: loc.lng },
+      stopover: true,
+    }));
+
+    directionsServiceRef.current.route(
+      {
+        origin: { lat: origin.lat, lng: origin.lng },
+        destination: { lat: destination.lat, lng: destination.lng },
+        waypoints: waypoints,
+        travelMode: google.maps.TravelMode.DRIVING,
+        optimizeWaypoints: false,
+      },
+      (response, status) => {
+        if (status === google.maps.DirectionsStatus.OK && response) {
+          // Extract the overview_path from the response
+          const route = response.routes[0];
+          const path = route.overview_path.map(point => ({
+            lat: point.lat(),
+            lng: point.lng(),
+          }));
+          setRoutePath(path);
+        } else {
+          setRoutePath([]);
+        }
+      }
+    );
+  }, [locations]);
+
+  return (
+    <LoadScript googleMapsApiKey="YOUR_VALID_Maps_API_KEY">
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={currentLocation}
+        zoom={25}
+        onLoad={onMapLoad}
+      >
+        {locations.map((loc, idx) => (
+          <Marker key={idx} position={{ lat: loc.lat, lng: loc.lng }} label={`${idx + 1}`} />
+        ))}
+        <Marker position={currentLocation} icon={{ url: "https://maps.google.com/mapfiles/ms/icons/truck.png" }} />
+        {/* Draw the route as a polyline */}
+        {routePath.length > 0 && (
+          <Polyline
+            path={routePath}
+            options={{
+              strokeColor: "#93C5FD",
+              strokeOpacity: 0.7,
+              strokeWeight: 4,
+            }}
+          />
+        )}
+      </GoogleMap>
+    </LoadScript>
+  );
+};
+
+export default MapComponent;
+
