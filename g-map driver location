@@ -1,321 +1,210 @@
-
-import React, { useEffect, useState, useRef, useCallback } from "react"; // Import useRef and useCallback
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   GoogleMap,
-  LoadScript,
-  Marker,
-  DirectionsRenderer,
+  useJsApiLoader,
   OverlayView,
+  DirectionsRenderer,
 } from "@react-google-maps/api";
 import Image from "next/image";
+import { CurrentLocation, Location } from "@/types/map-type";
+
+const containerStyle = { width: "100%", height: "100%" };
+
+const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+const MapComponent: React.FC<{
+  locations: Location[];
+  currentLocation: CurrentLocation;
+}> = ({ locations, currentLocation }) => {
+  const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
+  const [partialDirectionsResult, setPartialDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
+  const [hoveredMarkerIndex, setHoveredMarkerIndex] = useState<number | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const mapRef = useRef<google.maps.Map | null>(null);
+
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey,
+    id: 'google-map-script'
+  });
+
+  const onMapLoad = useCallback((map: google.maps.Map): void => {
+    mapRef.current = map;
+    setMapLoaded(true);
+  }, []);
+
+  // for route
+  useEffect(() => {
+    if (
+      !isLoaded ||
+      !mapLoaded ||
+      !locations ||
+      locations.length < 2
+    ) return;
+
+    const origin = locations[0];
+    const destination = locations[locations.length - 1];
+    const waypoints = locations.slice(1, -1).map((loc) => ({
+      location: { lat: loc.lat, lng: loc.lng },
+      stopover: true,
+    }));
+
+    const directionsService = new window.google.maps.DirectionsService();
+
+    // Full route
+    directionsService.route(
+      {
+        origin: { lat: origin.lat, lng: origin.lng },
+        destination: { lat: destination.lat, lng: destination.lng },
+        waypoints,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        optimizeWaypoints: false,
+      },
+      (result, status) => {
+        if (status === "OK" && result) setDirectionsResult(result);
+        else setDirectionsResult(null);
+      }
+    );
+
+    // Partial route up to current location
+    directionsService.route(
+      {
+        origin: { lat: origin.lat, lng: origin.lng },
+        destination: { lat: currentLocation.lat, lng: currentLocation.lng },
+        waypoints: [],
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === "OK" && result) setPartialDirectionsResult(result);
+        else setPartialDirectionsResult(null);
+      }
+    );
+  }, [locations, mapLoaded, currentLocation, isLoaded]);
 
 
-declare const google: any;
+  useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        mapRef.current = null;
+      }
+    };
+  }, []);
 
-const containerStyle = {
-  width: "100%",
-  height: "100%",
-};
-
-interface MapComponentProps {
-  locations: {
-    name: string;
-    lat: number;
-    lng: number;
-    status: string;
-    timestamp: string;
-  }[];
-  currentLocation: {
-    lat: number;
-    lng: number;
-  };
-}
-
-const MapComponent: React.FC<MapComponentProps> = ({
-  locations,
-  currentLocation,
-}) => {
-
-  // for validation 
   if (
     !currentLocation ||
     !Number.isFinite(currentLocation.lat) ||
     !Number.isFinite(currentLocation.lng)
   ) {
-    return (<div className="h-full p-4">Invalid or missing current location </div>
-    )
+    return <div className="h-full p-4">Invalid or missing current location</div>;
   }
 
-  const [directionsResult, setDirectionsResult] = useState<google.maps.DirectionsResult | null>(null);
-
-  // console.log( "location",locations,"currlocation", currentLocation);
-
-
-  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-
-  const onMapLoad = useCallback((map: google.maps.Map) => {
-    mapRef.current = map;
-
-    if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
-      directionsServiceRef.current = new google.maps.DirectionsService();
-    } else {
-      console.error("Google Maps API not available when map loaded");
-    }
-  }, []);
-
-  useEffect(() => {
-
-    if (!directionsServiceRef.current || !locations || locations.length < 2) {
-      setDirectionsResult(null);
-      return;
-    }
-
-    const origin = locations[0];
-    const destination = locations[locations.length - 1];
-    const waypoints = locations.slice(1, -1).map(loc => ({
-      location: { lat: loc.lat, lng: loc.lng },
-      stopover: true,
-    }));
-
-    directionsServiceRef.current.route(
-      {
-        origin: { lat: origin.lat, lng: origin.lng },
-        destination: { lat: destination.lat, lng: destination.lng },
-        waypoints: waypoints,
-        travelMode: google.maps.TravelMode.DRIVING,
-        optimizeWaypoints: false,
-      },
-      (response, status) => {
-        if (status === google.maps.DirectionsStatus.OK && response) {
-          setDirectionsResult(response);
-        } else {
-          console.error('Directions request failed due to ' + status);
-          setDirectionsResult(null);
-        }
-      }
-    );
-
-  }, [locations]);
-
-  const endPoint = locations[locations.length - 1];
-
-  interface Coordinates {
-    lat: number;
-    lng: number;
+  if (loadError) {
+    return <div className="h-full p-4">Error loading maps</div>;
   }
 
-function getBearing(start: Coordinates, end: Coordinates): number {
-  const toRad = (deg: number): number => (deg * Math.PI) / 180;
-  const toDeg = (rad: number): number => (rad * 180) / Math.PI;
-  const dLon = toRad(end.lng - start.lng);
-  const lat1 = toRad(start.lat);
-  const lat2 = toRad(end.lat);
-
-  const y = Math.sin(dLon) * Math.cos(lat2);
-  const x =
-    Math.cos(lat1) * Math.sin(lat2) -
-    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
-  const brng = Math.atan2(y, x);
-  return (toDeg(brng) + 360) % 360;
-}
-
-function findClosestIndex(locations: Coordinates[], current: Coordinates): number {
-  let minDist = Number.MAX_VALUE;
-  let idx = 0;
-  locations.forEach((loc, i) => {
-    const dist = Math.hypot(loc.lat - current.lat, loc.lng - current.lng);
-    if (dist < minDist) {
-      minDist = dist;
-      idx = i;
-    }
-  });
-  return idx;
-}
-
-// Usage in your component:
-const coordsList = locations.map(loc => ({ lat: loc.lat, lng: loc.lng }));
-const closestIdx = findClosestIndex(coordsList, currentLocation);
-const nextHop = coordsList[closestIdx + 1] || coordsList[closestIdx]; // fallback to self if at end
-const bearing = getBearing(currentLocation, nextHop);
-
+  if (!isLoaded) {
+    return <div className="h-full p-4">Loading maps...</div>;
+  }
 
   return (
-    <LoadScript googleMapsApiKey="YOUR_VALID_Maps_API_KEY">
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={currentLocation}
-        zoom={24}
-        onLoad={onMapLoad}
-      >
-        {locations.map((loc, idx) => (
-          <Marker key={idx} position={{ lat: loc.lat, lng: loc.lng }} label={`${idx + 1}`} title={`${loc.name}\nStatus: ${loc.status}\nTime: ${loc.timestamp}`} />
-        ))}
-
-       <OverlayView
-  position={currentLocation}
-  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
->
-  <div className="relative w-[80px] h-[80px]">
-    {/* Outer circle */}
-    <div className="absolute inset-0 rounded-full bg-blue-300 opacity-30 pointer-events-none"></div>
-    {/* Inner circle */}
-    <div className="absolute inset-4 rounded-full bg-blue-500 opacity-20 pointer-events-none"></div>
-    {/* Truck icon, rotated to point to end point */}
-    <div
-      title="Vehicle Current Location"
-      className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10"
-      style={{ transform: `translate(-50%, -50%) rotate(${bearing}deg)` }}
+    <GoogleMap
+      mapContainerStyle={containerStyle}
+      center={currentLocation}
+      zoom={30}
+      onLoad={onMapLoad}
+      options={{
+        styles: [
+          { featureType: "poi", elementType: "all", stylers: [{ visibility: "off" }] },
+          { featureType: "transit", elementType: "all", stylers: [{ visibility: "off" }] },
+        ],
+      }}
     >
-      <Image
-        src="/images/truck.svg"
-        alt="Truck icon"
-        height={40}
-        width={40}
-        className="opacity-100"
-        style={{ display: "block" }}
-      />
-    </div>
-  </div>
-</OverlayView>
+      {/* Markers for each hop */}
+      {locations.map((loc, idx) => (
+        <React.Fragment key={idx}>
+          <OverlayView
+            position={{ lat: loc.lat, lng: loc.lng }}
+            mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+          >
+            <div
+              onMouseEnter={() => setHoveredMarkerIndex(idx)}
+              onMouseLeave={() => setHoveredMarkerIndex(null)}
+              className="relative flex items-center justify-center w-6 h-6 bg-amber-50 rounded-full cursor-pointer shadow-md hover:scale-110 transition-transform"
+              title={loc.name}
+            >
+              <div className="w-3.5 h-3.5 bg-blue-500 rounded-full"></div>
+            </div>
+          </OverlayView>
+          {hoveredMarkerIndex === idx && (
+            <OverlayView
+              position={{ lat: loc.lat, lng: loc.lng }}
+              mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+            >
+              <div className="bg-white w-fit p-2 rounded-md shadow-md text-sm text-black whitespace-nowrap border border-gray-200 mt-8">
+                <div className="font-semibold">{loc.name}</div>
+                <div>Status: {loc.status}</div>
+                <div>Time: {loc.timestamp}</div>
+              </div>
+            </OverlayView>
+          )}
+        </React.Fragment>
+      ))}
 
-
-
-        {directionsResult && (
-          <DirectionsRenderer
-            directions={directionsResult}
-            options={{
-              polylineOptions: {
-                strokeColor: "#93C5FD",
-                strokeOpacity: 0.7,
-                strokeWeight: 4,
-              },
-              // suppressMarkers: true,
-            }}
-          />
-        )}
-
-      </GoogleMap>
-    </LoadScript>
-  );
-};
-
-export default MapComponent;
-
-
-
-
-
-//simple line
-
-
-import React, { useEffect, useState, useRef, useCallback } from "react";
-import {
-  GoogleMap,
-  LoadScript,
-  Marker,
-  Polyline,
-} from "@react-google-maps/api";
-
-declare const google: any;
-
-const containerStyle = {
-  width: "100%",
-  height: "100%",
-};
-
-interface Location {
-  name: string;
-  lat: number;
-  lng: number;
-  status: string;
-  timestamp: string;
-}
-
-interface MapComponentProps {
-  locations: Location[];
-  currentLocation: {
-    lat: number;
-    lng: number;
-  };
-}
-
-const MapComponent: React.FC<MapComponentProps> = ({ locations, currentLocation }) => {
-  const [routePath, setRoutePath] = useState<{ lat: number; lng: number }[]>([]);
-  const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-
-  const onMapLoad = useCallback((map: google.maps.Map): void => {
-    mapRef.current = map;
-    if (typeof google !== 'undefined' && typeof google.maps !== 'undefined') {
-      directionsServiceRef.current = new google.maps.DirectionsService();
-    }
-    }, []);
-
-  useEffect(() => {
-    if (!directionsServiceRef.current || !locations || locations.length < 2) {
-      setRoutePath([]);
-      return;
-    }
-
-    const origin = locations[0];
-    const destination = locations[locations.length - 1];
-    const waypoints = locations.slice(1, -1).map(loc => ({
-      location: { lat: loc.lat, lng: loc.lng },
-      stopover: true,
-    }));
-
-    directionsServiceRef.current.route(
-      {
-        origin: { lat: origin.lat, lng: origin.lng },
-        destination: { lat: destination.lat, lng: destination.lng },
-        waypoints: waypoints,
-        travelMode: google.maps.TravelMode.DRIVING,
-        optimizeWaypoints: false,
-      },
-      (response, status) => {
-        if (status === google.maps.DirectionsStatus.OK && response) {
-          // Extract the overview_path from the response
-          const route = response.routes[0];
-          const path = route.overview_path.map(point => ({
-            lat: point.lat(),
-            lng: point.lng(),
-          }));
-          setRoutePath(path);
-        } else {
-          setRoutePath([]);
-        }
-      }
-    );
-  }, [locations]);
-
-  return (
-    <LoadScript googleMapsApiKey="YOUR_VALID_Maps_API_KEY">
-      <GoogleMap
-        mapContainerStyle={containerStyle}
-        center={currentLocation}
-        zoom={25}
-        onLoad={onMapLoad}
+      {/* Current vehicle location marker */}
+      <OverlayView
+        position={currentLocation}
+        mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
       >
-        {locations.map((loc, idx) => (
-          <Marker key={idx} position={{ lat: loc.lat, lng: loc.lng }} label={`${idx + 1}`} />
-        ))}
-        <Marker position={currentLocation} icon={{ url: "https://maps.google.com/mapfiles/ms/icons/truck.png" }} />
-        {/* Draw the route as a polyline */}
-        {routePath.length > 0 && (
-          <Polyline
-            path={routePath}
-            options={{
-              strokeColor: "#93C5FD",
+        <div className="relative w-[60px] h-[60px]">
+          <div className="absolute inset-0 rounded-full bg-blue-400 opacity-30 pointer-events-none animate-[ping_2s_ease-in-out_infinite]"></div>
+          <div className="absolute inset-2 rounded-full bg-blue-500 opacity-50 pointer-events-none"></div>
+          <div
+            title="Vehicle Current Location"
+            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10"
+            style={{ transform: ` rotate(220deg)` }}
+          >
+            <Image
+              src="/images/truck.svg"
+              alt="Truck icon"
+              height={30}
+              width={30}
+              className="opacity-100"
+              style={{ display: "block" }}
+            />
+          </div>
+        </div>
+      </OverlayView>
+
+      {/* Full Route   */}
+      {directionsResult && (
+        <DirectionsRenderer
+          directions={directionsResult}
+          options={{
+            suppressMarkers: true,
+            polylineOptions: {
+              strokeColor: "#60A5FA",
               strokeOpacity: 0.7,
               strokeWeight: 4,
-            }}
-          />
-        )}
-      </GoogleMap>
-    </LoadScript>
+            },
+          }}
+        />
+      )}
+
+      {/* start to current location route  */}
+      {partialDirectionsResult && (
+        <DirectionsRenderer
+          directions={partialDirectionsResult}
+          options={{
+            suppressMarkers: true,
+            polylineOptions: {
+              strokeColor: "#2563EB",
+              strokeOpacity: 1,
+              strokeWeight: 5,
+            },
+          }}
+        />
+      )}
+    </GoogleMap>
   );
 };
 
 export default MapComponent;
-
