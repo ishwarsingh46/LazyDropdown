@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Select Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@radix-ui/react-popover@1.0.7/dist/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cmdk@1.0.0/dist/index.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide-react@0.276.0/dist/umd/lucide-react.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/class-variance-authority@0.7.0/dist/index.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tailwind-merge@2.0.0/dist/index.min.js"></script>
+  <style>
+    [data-radix-popper-content-wrapper] {
+      z-index: 50 !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useMemo, useEffect } = React;
+    const { Popover, PopoverTrigger, PopoverContent } = window['@radix-ui/react-popover'];
+    const { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } = window.cmdk;
+    const { ChevronDown, X, Check } = window['lucide-react'];
+    const { cva } = window['class-variance-authority'];
+    const { twMerge } = window['tailwind-merge'];
+
+    // MultiSelect Component
+    const multiSelectVariants = cva(
+      'flex items-center justify-between rounded-md border border-gray-300 bg-white text-sm transition-colors',
+      {
+        variants: {
+          variant: {
+            default: 'border-gray-300 bg-white text-gray-900',
+            inverted: 'border-gray-700 bg-gray-800 text-white',
+          },
+        },
+        defaultVariants: {
+          variant: 'default',
+        },
+      }
+    );
+
+    const MultiSelect = ({
+      options,
+      onValueChange,
+      defaultValue = [],
+      placeholder = 'Select options...',
+      maxCount = Infinity,
+      variant = 'default',
+    }) => {
+      const [selected, setSelected] = useState(defaultValue);
+      const [open, setOpen] = useState(false);
+
+      useEffect(() => {
+        onValueChange?.(selected);
+      }, [selected, onValueChange]);
+
+      const handleSelect = (value) => {
+        if (selected.includes(value)) {
+          setSelected(selected.filter((item) => item !== value));
+        } else if (selected.length < maxCount) {
+          setSelected([...selected, value]);
+        }
+      };
+
+      const handleClear = () => {
+        setSelected([]);
+      };
+
+      const availableOptions = useMemo(() => {
+        return options.filter((option) => !selected.includes(option.value));
+      }, [options, selected]);
+
+      return (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <div
+              className={twMerge(
+                multiSelectVariants({ variant }),
+                'min-h-[38px] w-full cursor-pointer px-3 py-2'
+              )}
+            >
+              <div className="flex flex-wrap gap-1">
+                {selected.length > 0 ? (
+                  selected.map((value) => {
+                    const option = options.find((opt) => opt.value === value);
+                    return (
+                      <span
+                        key={value}
+                        className="inline-flex items-center rounded-full bg-gray-100 px-2 py-1 text-xs"
+                      >
+                        {option?.icon && <option.icon className="mr-1 h-4 w-4" />}
+                        {option?.label}
+                        <X
+                          className="ml-1 h-3 w-3 cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelect(value);
+                          }}
+                        />
+                      </span>
+                    );
+                  })
+                ) : (
+                  <span className="text-gray-500">{placeholder}</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {selected.length > 0 && (
+                  <X
+                    className="h-4 w-4 cursor-pointer text-gray-500"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleClear();
+                    }}
+                  />
+                )}
+                <ChevronDown className="h-4 w-4 text-gray-500" />
+              </div>
+            </div>
+          </PopoverTrigger>
+          <PopoverContent className="w-[300px] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Search options..." />
+              <CommandList>
+                <CommandEmpty>No options found.</CommandEmpty>
+                <CommandGroup>
+                  {availableOptions.map((option) => (
+                    <CommandItem
+                      key={option.value}
+                      value={option.value}
+                      onSelect={() => handleSelect(option.value)}
+                      className="flex items-center gap-2"
+                    >
+                      {option.icon && <option.icon className="h-4 w-4" />}
+                      {option.label}
+                      {selected.includes(option.value) && (
+                        <Check className="ml-auto h-4 w-4" />
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      );
+    };
+
+    // Demo App
+    const App = () => {
+      const [selectedFrameworks, setSelectedFrameworks] = useState(['react', 'vue']);
+      const frameworks = [
+        { value: 'react', label: 'React', icon: window['lucide-react'].Turtle },
+        { value: 'vue', label: 'Vue', icon: window['lucide-react'].Cat },
+        { value: 'angular', label: 'Angular', icon: window['lucide-react'].Dog },
+        { value: 'svelte', label: 'Svelte', icon: window['lucide-react'].Rabbit },
+      ];
+
+      return (
+        <div className="p-4 max-w-md mx-auto">
+          <h1 className="text-2xl font-bold mb-4">Reusable Multi-Select</h1>
+          <MultiSelect
+            options={frameworks}
+            onValueChange={setSelectedFrameworks}
+            defaultValue={selectedFrameworks}
+            placeholder="Select frameworks..."
+            maxCount={3}
+            variant="default"
+          />
+          <div className="mt-4">
+            <h2 className="text-lg font-semibold">Selected:</h2>
+            <ul className="list-disc pl-5">
+              {selectedFrameworks.map((framework) => (
+                <li key={framework}>{framework}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    };
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
