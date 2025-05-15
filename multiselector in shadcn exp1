@@ -1,0 +1,118 @@
+// components/MultiSelect.tsx
+import * as React from "react"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Check, ChevronsUpDown, X } from "lucide-react"
+import { cn } from "@/lib/utils"
+
+export type Option = {
+  label: string
+  value: string
+  icon?: React.ReactNode
+  disable?: boolean
+}
+
+interface MultiSelectProps {
+  options: Option[]
+  defaultValue?: string[]
+  onValueChange?: (values: string[]) => void
+  placeholder?: string
+}
+
+export function MultiSelect({
+  options,
+  defaultValue = [],
+  onValueChange,
+  placeholder = "Select...",
+}: MultiSelectProps) {
+  const [open, setOpen] = React.useState(false)
+  const [selectedValues, setSelectedValues] = React.useState<string[]>(defaultValue)
+
+  React.useEffect(() => {
+    onValueChange?.(selectedValues)
+  }, [selectedValues])
+
+  const toggleSelect = (value: string) => {
+    setSelectedValues((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    )
+  }
+
+  const removeItem = (value: string) => {
+    setSelectedValues((prev) => prev.filter((v) => v !== value))
+  }
+
+  const selectedLabels = options.filter(o => selectedValues.includes(o.value)).map(o => o.label)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between"
+        >
+          <span>{selectedLabels.length > 0 ? `${selectedLabels.length} selected` : placeholder}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-full p-0">
+        <Command>
+          <CommandInput placeholder="Search..." />
+          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandGroup>
+            {options.map((option) => (
+              <CommandItem
+                key={option.value}
+                value={option.value}
+                disabled={option.disable}
+                onSelect={() => toggleSelect(option.value)}
+              >
+                <div className="mr-2">
+                  <Check
+                    className={cn(
+                      "h-4 w-4",
+                      selectedValues.includes(option.value) ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                </div>
+                {option.icon && <div className="mr-2">{option.icon}</div>}
+                <span>{option.label}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </Command>
+      </PopoverContent>
+      {selectedValues.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {selectedLabels.map((label, index) => (
+            <Badge key={index} variant="secondary" className="flex items-center gap-1">
+              {label}
+              <X className="h-3 w-3 cursor-pointer" onClick={() => removeItem(options.find(o => o.label === label)?.value!)} />
+            </Badge>
+          ))}
+        </div>
+      )}
+    </Popover>
+  )
+}
+
+
+import { MultiSelect, Option } from "@/components/MultiSelect";
+
+const options: Option[] = [
+  { label: "HTML", value: "html" },
+  { label: "CSS", value: "css" },
+  { label: "JavaScript", value: "js" },
+  { label: "React", value: "react" },
+];
+
+<MultiSelect
+  options={options}
+  defaultValue={["html", "css"]}
+  onValueChange={(values) => console.log("Selected:", values)}
+  placeholder="Select skills"
+/>
