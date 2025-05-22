@@ -1,0 +1,517 @@
+"use client";
+
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/app/components/ui/dialog";
+import { Label } from "@/app/components/ui/label";
+import { Button } from "@/app/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/app/components/ui/popover";
+import { Calendar } from "@/app/components/ui/calendar";
+import { Checkbox } from "@/app/components/ui/checkbox";
+import { format } from "date-fns";
+import { CalendarIcon, PlusCircle, Trash2 } from "lucide-react";
+import { Input } from "../ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/app/components/ui/table";
+import { MultiSelect } from "@/app/components/ui/multiselect";
+import { cn } from "@/lib/utils";
+import { CreateNewTripProps, FormData, Hop } from "@/types/trips-type";
+
+// Types
+
+// Dummy options for selects
+const dummyDropdownOptions = [
+  { value: "id1", label: "Option 1" },
+  { value: "id2", label: "Option 2" },
+  { value: "id3", label: "Option 3" },
+  { value: "id4", label: "Option 4" },
+];
+
+const dummyLocationOptions = [
+  { value: "loc1", label: "Warehouse A" },
+  { value: "loc2", label: "Store B" },
+  { value: "loc3", label: "Depot C" },
+  { value: "loc4", label: "Customer D" },
+];
+const actionOptions = [
+  { label: "PICKUP", value: "PICKUP" },
+  { label: "DELIVERY", value: "DELIVERY" },
+  // Add more actions as needed
+];
+
+export default function CreateNewTrip({ isOpen, onClose }: CreateNewTripProps) {
+  const initialFormData: FormData = {
+    indentId: "",
+    transporterId: "",
+    driverId: "",
+    vehicleId: "",
+    startDateTime: undefined,
+    route: "",
+    hops: [],
+  };
+
+  // Form data state
+  const [formData, setFormData] = useState<FormData>(initialFormData);
+
+  // Separate state for multi-select of locations before adding hops
+  const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
+  const handleHopActionsChange = (hopId: string, actions: string[]) => {
+    setFormData((prev) => ({
+      ...prev,
+      hops: prev.hops.map((hop) =>
+        hop.id === hopId ? { ...hop, selectedActions: actions } : hop
+      ),
+    }));
+  };
+
+  // Separate state for calendar picker display and time inputs
+  const [date, setDate] = useState<Date | undefined>(undefined); 
+  const [time, setTime] = useState({ hours: 0, minutes: 0 }); 
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false); 
+
+  const handleSelectChange = (field: keyof FormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Handler for start date calendar picker
+  const handleDateChange = (selectedDate: Date | undefined) => {
+    console.log("Selected date:", selectedDate);
+    if (selectedDate) {
+      const currentHours = date ? date.getHours() : new Date().getHours();
+      const currentMinutes = date ? date.getMinutes() : new Date().getMinutes();
+
+      const newDateTime = new Date(
+        selectedDate.getFullYear(),
+        selectedDate.getMonth(),
+        selectedDate.getDate(),
+        currentHours,
+        currentMinutes
+      );
+      setDate(newDateTime);
+      setFormData((prev) => ({ ...prev, startDateTime: newDateTime }));
+    } else {
+      setDate(undefined);
+      setFormData((prev) => ({ ...prev, startDateTime: undefined }));
+    }
+  };
+
+  // Handler for time input change
+  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const numValue = parseInt(value, 10);
+
+    setTime((prevTime) => {
+      const newTime = { ...prevTime, [name]: numValue };
+
+      if (date) {
+        const newDateTime = new Date(date);
+        newDateTime.setHours(newTime.hours);
+        newDateTime.setMinutes(newTime.minutes);
+        setDate(newDateTime); // Update the date state
+        setFormData((prev) => ({ ...prev, startDateTime: newDateTime }));
+      }
+      return newTime;
+    });
+  };
+
+  // Handler to add hops based on selected locations
+  const handleAddHops = () => {
+    if (selectedLocations.length === 0) return;
+
+    // Get existing locationIds in hops
+    const existingLocationIds = formData.hops.map((hop) => hop.locationId);
+
+    // Filter out locations already in hops
+    const newLocations = selectedLocations.filter(
+      (locId) => !existingLocationIds.includes(locId)
+    );
+
+    if (newLocations.length === 0) {
+      setSelectedLocations([]); // reset anyway
+      return;
+    }
+
+    const newHops: Hop[] = newLocations.map((locId) => ({
+      id: Date.now().toString() + locId, // Unique id
+      locationId: locId,
+      isSource: false,
+      isDestination: false,
+      customerId: "",
+      actions: [
+        { type: "PICKUP", quantity: 0 },
+        { type: "DELIVERY", quantity: 0 },
+      ],
+      selectedActions: [],
+    }));
+
+    setFormData((prev) => ({
+      ...prev,
+      hops: [...prev.hops, ...newHops],
+    }));
+
+    setSelectedLocations([]);
+  };
+
+  // Handler to remove a hop by id
+  const handleRemoveHop = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      hops: prev.hops.filter((hop) => hop.id !== id),
+    }));
+  };
+
+  // Handler for checkbox changes for isSource and isDestination fields in hops
+  const handleHopCheckboxChange = (
+    id: string,
+    field: "isSource" | "isDestination",
+    checked: boolean
+  ) => {
+    setFormData((prev) => ({
+      ...prev,
+      hops: prev.hops.map((hop) => {
+        if (field === "isSource") {
+          // Only one can be source: uncheck all others if this one is checked
+          return {
+            ...hop,
+            isSource: hop.id === id ? checked : false,
+          };
+        } else if (field === "isDestination") {
+          // Only one can be destination: uncheck all others if this one is checked
+          return {
+            ...hop,
+            isDestination: hop.id === id ? checked : false,
+          };
+        }
+        return hop;
+      }),
+    }));
+  };
+
+  // Handler for Pickup quantity change input
+  const handlePickupQuantityChange = (id: string, quantity: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      hops: prev.hops.map((hop) => {
+        if (hop.id === id) {
+          return {
+            ...hop,
+            actions: hop.actions.map((action) =>
+              action.type === "PICKUP"
+                ? { ...action, quantity: quantity }
+                : action
+            ),
+          };
+        }
+        return hop;
+      }),
+    }));
+  };
+
+  // Handler for Delivery quantity change input
+  const handleDeliveryQuantityChange = (id: string, quantity: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      hops: prev.hops.map((hop) => {
+        if (hop.id === id) {
+          return {
+            ...hop,
+            actions: hop.actions.map((action) =>
+              action.type === "DELIVERY"
+                ? { ...action, quantity: quantity }
+                : action
+            ),
+          };
+        }
+        return hop;
+      }),
+    }));
+  };
+
+  // Handler for Submit button
+  const handleSubmit = () => {
+    const output = {
+      ...formData,
+      startDateTime: formData.startDateTime?.toISOString() || null,
+      hops: formData.hops.map((hop) => ({
+        locationId: hop.locationId,
+        isSource: hop.isSource,
+        isDestination: hop.isDestination,
+        customerId: hop.customerId,
+        actions: hop.actions,
+        selectedActions: hop.selectedActions, 
+      })),
+    };
+    console.log("Form submitted:", JSON.stringify(output, null, 2));
+    onClose();
+  };
+
+  // Handler for Reset button
+  const handleReset = () => {
+    setFormData(initialFormData);
+    setSelectedLocations([]);
+    setDate(undefined);
+    setTime({ hours: 0, minutes: 0 }); 
+    setIsDatePickerOpen(false); 
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Trip</DialogTitle>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          {/* Select Inputs */}
+          <div className="grid grid-cols-2 gap-4">
+            {["indentId", "transporterId", "driverId", "vehicleId"].map(
+              (key) => (
+                <div key={key} className="grid gap-2">
+                  <Label>{key}</Label>
+                  <Select
+                    value={formData[key as keyof FormData] as string}
+                    onValueChange={(value) =>
+                      handleSelectChange(key as keyof FormData, value)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={`Select ${key}`} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {dummyDropdownOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )
+            )}
+
+            {/* Start Date and Time Picker */}
+            <div className="grid gap-2">
+              <Label>Start Date & Time</Label>
+              <Popover
+                open={isDatePickerOpen}
+                onOpenChange={setIsDatePickerOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-[240px] justify-start text-left font-normal",
+                      !date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date ? (
+                      format(date, "PPP pp")
+                    ) : (
+                      <span>Pick a date and time</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={handleDateChange}
+                    initialFocus
+                  />
+                  <div className="p-3 border-t border-gray-200 flex justify-center gap-2">
+                    <Input
+                      type="number"
+                      name="hours"
+                      placeholder="HH"
+                      min={0}
+                      max={23}
+                      value={time.hours.toString().padStart(2, "0")} // Display with leading zero
+                      onChange={handleTimeChange}
+                      className="w-16"
+                    />
+                    :
+                    <Input
+                      type="number"
+                      name="minutes"
+                      placeholder="MM"
+                      min={0}
+                      max={59}
+                      value={time.minutes.toString().padStart(2, "0")} // Display with leading zero
+                      onChange={handleTimeChange}
+                      className="w-16"
+                    />
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          {/* Location multi-select and add hops button */}
+          <div className="pt-4 space-y-4">
+            <div className="flex items-center gap-4">
+              <MultiSelect
+                options={dummyLocationOptions}
+                selected={selectedLocations}
+                onChange={setSelectedLocations}
+                placeholder="Select multiple locations"
+              />
+              <Button onClick={handleAddHops} variant="outline">
+                <PlusCircle className="w-4 h-4 mr-2" />
+                Add Hops
+              </Button>
+            </div>
+          </div>
+
+          {/* Hops Table */}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Source</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Pickup Quantity</TableHead>
+                <TableHead>Delivery Quantity</TableHead>
+                <TableHead>Actions</TableHead>
+                <TableHead>Remove</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {formData.hops.map((hop) => {
+                // Determine if PICKUP and DELIVERY actions are selected
+                const isPickupSelected = hop.selectedActions.includes("PICKUP");
+                const isDeliverySelected =
+                  hop.selectedActions.includes("DELIVERY");
+
+                // Get current quantities
+                const pickupQuantity =
+                  hop.actions.find((a) => a.type === "PICKUP")?.quantity || 0;
+                const deliveryQuantity =
+                  hop.actions.find((a) => a.type === "DELIVERY")?.quantity || 0;
+
+                return (
+                  <TableRow key={hop.id}>
+                    {/* Source checkbox */}
+                    <TableCell>
+                      <Checkbox
+                        checked={hop.isSource}
+                        onCheckedChange={(checked) =>
+                          handleHopCheckboxChange(hop.id, "isSource", !!checked)
+                        }
+                      />
+                    </TableCell>
+
+                    {/* Destination checkbox */}
+                    <TableCell>
+                      <Checkbox
+                        checked={hop.isDestination}
+                        onCheckedChange={(checked) =>
+                          handleHopCheckboxChange(
+                            hop.id,
+                            "isDestination",
+                            !!checked
+                          )
+                        }
+                      />
+                    </TableCell>
+
+                    {/* Location label */}
+                    <TableCell>
+                      {dummyLocationOptions.find(
+                        (opt) => opt.value === hop.locationId
+                      )?.label || hop.locationId}
+                    </TableCell>
+
+                    {/* Pickup Quantity input */}
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={pickupQuantity}
+                        onChange={(e) =>
+                          handlePickupQuantityChange(
+                            hop.id,
+                            Number(e.target.value)
+                          )
+                        }
+                        disabled={!isPickupSelected}
+                      />
+                    </TableCell>
+
+                    {/* Delivery Quantity input */}
+                    <TableCell>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={deliveryQuantity}
+                        onChange={(e) =>
+                          handleDeliveryQuantityChange(
+                            hop.id,
+                            Number(e.target.value)
+                          )
+                        }
+                        disabled={!isDeliverySelected}
+                      />
+                    </TableCell>
+
+                    {/* Action multi-select */}
+                    <TableCell>
+                      <MultiSelect
+                        options={actionOptions}
+                        selected={hop.selectedActions}
+                        onChange={(actions) =>
+                          handleHopActionsChange(hop.id, actions)
+                        }
+                      />
+                    </TableCell>
+
+                    {/* Remove button */}
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveHop(hop.id)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+
+          {/* Footer Buttons */}
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={handleReset}>
+              Reset
+            </Button>
+            <Button onClick={handleSubmit}>Submit</Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
