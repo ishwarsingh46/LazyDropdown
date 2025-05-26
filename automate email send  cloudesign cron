@@ -1,0 +1,65 @@
+Yes — if you follow this approach and import your dailyLeadTest.js file into your index.js (or server.js), it will automatically send a lead once a day as long as your server is running.
+
+✅ What You Need to Do
+1. Create the dailyLeadTest.js file
+
+
+
+
+
+
+// dailyLeadTest.js
+import cron from "node-cron";
+import axios from "axios";
+
+const LEAD_API_URL = "https://yourdomain.com/api/lead"; // ✅ Update this
+
+const sendTestLead = async () => {
+  try {
+    const response = await axios.post(LEAD_API_URL, {
+      name: "Test User",
+      email: "testuser@example.com",
+      phone: "9999999999",
+      source: "daily-cron-test",
+    });
+    console.log("✅ Lead test sent successfully:", response.data);
+  } catch (err) {
+    console.error("❌ Lead test failed:", err.response?.data || err.message);
+  }
+};
+
+// Schedule to run every day at 9:00 AM
+cron.schedule("0 9 * * *", () => {
+  console.log("🕘 Running daily lead test...");
+  sendTestLead();
+});
+
+
+
+
+2. Import This File in Your index.js (or app.js or server.js)
+Add this line near the top of your index.js file:
+
+
+
+
+import './dailyLeadTest.js'; // 👈 This starts the cron job when server starts
+
+
+
+
+✔️ Result
+Your Express server starts.
+
+The cron job gets registered.
+
+Every day at 9:00 AM server time, it sends a test lead to your backend route (/api/lead).
+
+You’ll see success or error logs in your terminal.
+
+🔔 Important Notes
+Make sure your server stays running 24/7, e.g., on VPS, Render, Railway, etc.
+
+If you're deploying to something like Render or Vercel (serverless), the cron job won’t work unless it's a background process.
+
+If you're using PM2, it will work just fine as long as the app is running.
