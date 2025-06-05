@@ -1,0 +1,146 @@
+import React, { useEffect, useRef, ReactNode, MouseEvent, KeyboardEvent } from "react";
+import { X } from "lucide-react";
+
+// Root dialog component
+interface CustomDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}
+
+export function CustomDialog({ open, onOpenChange, children }: CustomDialogProps) {
+  useEffect(() => {
+    document.body.style.overflow = open ? "hidden" : "unset";
+    return () => {
+      document.body.style.overflow = "unset";
+    };
+  }, [open]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className="fixed inset-0 bg-black/50"
+        onClick={() => onOpenChange(false)}
+      />
+      {children}
+    </div>
+  );
+}
+
+// Dialog content
+interface CustomDialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+  className?: string;
+  onClose?: () => void;
+}
+
+export function CustomDialogContent({
+  children,
+  className = "",
+  onClose,
+  ...props
+}: CustomDialogContentProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && onClose) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape as any);
+    return () => document.removeEventListener("keydown", handleEscape as any);
+  }, [onClose]);
+
+  const handleContentClick = (e: MouseEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+  };
+
+  return (
+    <div
+      ref={contentRef}
+      onClick={handleContentClick}
+      className={`
+        fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+        bg-white rounded-lg shadow-xl border
+        w-full max-w-2xl max-h-[95vh] 
+        overflow-hidden flex flex-col
+        ${className}
+      `}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
+
+// Dialog header
+interface CustomDialogHeaderProps {
+  children: ReactNode;
+  className?: string;
+  showClose?: boolean;
+  onClose?: () => void;
+}
+
+export function CustomDialogHeader({
+  children,
+  className = "",
+  showClose = true,
+  onClose,
+}: CustomDialogHeaderProps) {
+  return (
+    <div className={`flex items-center justify-between p-6 border-b ${className}`}>
+      <div className="flex-1">{children}</div>
+      {showClose && onClose && (
+        <button
+          onClick={onClose}
+          className="ml-4 p-1 rounded-sm opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Dialog title
+interface CustomDialogTitleProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function CustomDialogTitle({ children, className = "" }: CustomDialogTitleProps) {
+  return (
+    <h2 className={`text-lg font-semibold leading-none tracking-tight ${className}`}>
+      {children}
+    </h2>
+  );
+}
+
+// Dialog body
+interface CustomDialogBodyProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function CustomDialogBody({ children, className = "" }: CustomDialogBodyProps) {
+  return <div className={`flex-1 overflow-y-auto p-6 ${className}`}>{children}</div>;
+}
+
+// Dialog footer
+interface CustomDialogFooterProps {
+  children: ReactNode;
+  className?: string;
+}
+
+export function CustomDialogFooter({ children, className = "" }: CustomDialogFooterProps) {
+  return (
+    <div className={`flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 p-6 border-t ${className}`}>
+      {children}
+    </div>
+  );
+}
